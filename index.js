@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
+const mongodb = require("mongodb");
 const app = express();
 
 
@@ -66,5 +67,16 @@ app.post("/peerserver/email/send", function(request, response){
 
 });
 
+
+
+app.post("/peerserver/chat/create", function(request, response){
+
+    //create a new chat server..
+    //data will be stored on our server
+
+
+
+
+})
 
 app.listen("5000", () => console.log("Server on PORT 5000"));
