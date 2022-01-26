@@ -3,6 +3,7 @@ const cors = require("cors");
 const nodemailer = require("nodemailer");
 const mongodb = require("mongodb");
 const mysql = require("mysql");
+const { send } = require("express/lib/response");
 require("dotenv-defaults").config();
 const app = express();
 
@@ -55,7 +56,7 @@ async function createChat(author, connection_id, peer_email, time_created){
 
 
 
-  const sql = `INSERT INTO chats(chat_unique_id, peers, date_created) VALUES('${connection_id}', '${peers}',  '${time_created}')`;
+  const sql = `INSERT INTO chats(chat_unique_id, is_active, from_email, to_email, peers, date_created) VALUES('${connection_id}', true, '${author_email}', '${peer_email}',  '${peers}',  '${time_created}')`;
 
   _conn.getConnection(function(err, connection){
 
@@ -99,6 +100,9 @@ async function createChat(author, connection_id, peer_email, time_created){
   const createChatsTable = `CREATE TABLE IF NOT EXISTS chats(
                               id INT AUTO_INCREMENT PRIMARY KEY,
                               chat_unique_id VARCHAR(132) NOT NULL,
+                              is_active BOOLEAN, 
+                              from_email VARCHAR(132),
+                              to_email VARCHAR(132),
                               peers TEXT NOT NULL,
                               date_created VARCHAR(132)
                             )`;
@@ -320,5 +324,96 @@ app.post("/peerserver/chat/create", function(request, response){
 
 
 })
+
+
+
+app.post("/peerserver/connections/retrieve-active", function(request, response){
+    const chat_data = request.body.chat_data;
+
+    const author = chat_data.author; //this contains the author_email and author_name
+    const peer_email = chat_data.peer_email;
+    
+    const connection_id = chat_data.connection_id;
+
+    //check the data database for this connection
+
+    const check_query = `SELECT * FROM chats WHERE from_email='${author.author_email}' AND to_email='${peer_email}' AND chat_unique_id='${connection_id}' AND is_active=true LIMIT 1`;
+    _conn.getConnection(function(err, connection){
+        if(err){
+            //
+        }
+
+        connection.query(check_query, function(error, results){
+
+            if(error){
+                //run the error..
+                throw new Error("Something went wrong: ", error.message)
+            }
+
+
+            if(results.length > 0){
+
+                let check_result = results[0];
+
+                response.send({
+                    message: "An ongoing chat exists between peers",
+                    data: {
+                        chat_data: chat_data,
+                        result: check_result
+                    },
+                    code: "success"
+                });
+
+            }else{
+
+                response.send({
+                    message: "Operation not successful",
+                    data: null,
+                    code: "error"
+                });
+
+
+            }
+
+
+
+        })
+
+
+    })
+
+    
+
+});
+
+
+
+app.get("/peerserver/connections/trigger-recepient-reload", function(request, response){
+    //triggers an event 
+    //this will ensure that the server 
+    //the recepient must be listening before they can get information from this ..
+
+    //console.log(request.query);
+    let reload_time;
+    if(request.query.reload_time == null || request.query.reload_time == undefined){
+        reload_time = new Date().getTime();
+    }else{
+        reload_time = request.query.reload_time;
+    }
+
+    
+
+    console.log("Triggered");
+
+    response.setHeader("Content-Type", "text/event-stream");
+
+    sendTrigger(response , reload_time)
+
+
+})
+
+function sendTrigger(response, reload_time){
+    response.write("data: " + `trigger-reconnection-${reload_time}\n\n`);
+}
 
 app.listen("5000", () => console.log("Server on PORT 5000"));
