@@ -3,14 +3,25 @@ const cors = require("cors");
 const nodemailer = require("nodemailer");
 const mongodb = require("mongodb");
 const mysql = require("mysql");
+const Pusher = require("pusher");
 const { send } = require("express/lib/response");
 require("dotenv-defaults").config();
 const app = express();
 
 
-
 app.use(express.json());
 app.use(cors());
+
+
+//Pusher Setup
+const pusher = new Pusher({
+  appId: "1338629",
+  key: "692bb295a55675b8521d",
+  secret: "0c546b3c418cc8894b1e",
+  cluster: "eu",
+  useTLS: true
+});
+
 
 //Email Setup
 var transporter = nodemailer.createTransport({
@@ -89,6 +100,44 @@ async function createChat(author, connection_id, peer_email, time_created){
 
 
 
+async function getChatMessages(connection_id){
+  //Gets the chat messages for this chat connection_id
+  
+  // get_sql = `SELECT * FROM chats_messages WHERE chat_unique_id='${connection_id}'`;
+
+  // _conn.getConnection(function(err, connection){
+  //   if(err){
+  //     //
+  //   }
+
+  //   connection.query(get_sql, function(query_error, results){
+  //       if(query_error){
+  //           //error running the query
+  //           console.log("Error");
+  //       }
+
+
+  //       if(results.length > 0){
+  //         console.log("Nothing here");
+
+  //         return [];
+
+  //       }else{
+
+  //         return results;
+
+  //       }
+
+
+  //   })
+
+  //   connection.release();
+
+  // })
+
+
+}
+
 
 
 //End of Functions
@@ -132,7 +181,7 @@ async function createChat(author, connection_id, peer_email, time_created){
                                       id INT AUTO_INCREMENT PRIMARY KEY,
                                       chat_unique_id VARCHAR(132) NOT NULL,
                                       message LONGTEXT,
-                                      author_email INT,
+                                      author_email VARCHAR(132),
                                       date_created TIMESTAMP
       )`
 
@@ -326,6 +375,96 @@ app.post("/peerserver/chat/create", function(request, response){
 })
 
 
+app.get("/peerserver/connections/peer/check", function(request, response){
+    //only the connectionId is needed here...
+  
+    const connectionKey = request.query.connectionKey;
+
+    check_query = `SELECT * FROM chats WHERE chat_unique_id='${connectionKey}' AND is_active=true LIMIT 1`;
+
+    _conn.getConnection(function(error, check_connection){
+      if(error){
+
+      }
+
+
+      check_connection.query(check_query, function(check_error, check_results){
+
+        if(check_error){
+          //
+        }
+
+        if(check_results.length > 0){
+          //there is results data..
+          //load the chats ..
+
+          get_chats_query = `SELECT * FROM chats_messages WHERE chat_unique_id='${connectionKey}'`;
+          _conn.getConnection(function(get_chats_error, get_chats_connection){
+
+            if(get_chats_error){
+
+            }
+
+            get_chats_connection.query(get_chats_query, function(err, get_chats_results){
+                if(err){
+
+                }
+
+
+                if(get_chats_results.length > 0){
+                  response.send({
+                    message: "chat data available",
+                    data: {
+                        chat_messages: get_chats_results,
+                        chat_data: check_results[0]
+                    },
+                    code: "chat-messages-available"
+                  })
+
+                }else{
+                  response.send({
+                    message: "chat data not available",
+                    data: null,
+                    code: "chat-messages-not-available"
+                  })
+
+
+                }
+
+
+            })
+
+            get_chats_connection.release();
+
+
+          })
+          
+
+
+
+        }else{
+          //no results here..
+          response.send({
+            message: "chat data not available",
+            data: null,
+            code: "chat-messages-not-available"
+          })
+
+        }
+
+      })
+
+      check_connection.release();
+
+
+    })
+
+
+
+
+})
+
+
 
 app.post("/peerserver/connections/retrieve-active", function(request, response){
     const chat_data = request.body.chat_data;
@@ -336,14 +475,13 @@ app.post("/peerserver/connections/retrieve-active", function(request, response){
     const connection_id = chat_data.connection_id;
 
     //check the data database for this connection
-
     const check_query = `SELECT * FROM chats WHERE from_email='${author.author_email}' AND to_email='${peer_email}' AND chat_unique_id='${connection_id}' AND is_active=true LIMIT 1`;
     _conn.getConnection(function(err, connection){
         if(err){
-            //
+            throw new Error("Error: ", err.message);
         }
 
-        connection.query(check_query, function(error, results){
+        connection.query(check_query, async function(error, results){
 
             if(error){
                 //run the error..
@@ -355,14 +493,59 @@ app.post("/peerserver/connections/retrieve-active", function(request, response){
 
                 let check_result = results[0];
 
-                response.send({
-                    message: "An ongoing chat exists between peers",
-                    data: {
-                        chat_data: chat_data,
-                        result: check_result
-                    },
-                    code: "success"
-                });
+                //get the active chats 
+                //console.log(await getChatMessages(connection_id))
+                get_sql = `SELECT * FROM chats_messages WHERE chat_unique_id='${connection_id}'`;
+
+                _conn.getConnection(function(err, get_chats_connection){
+                  if(err){
+                    //
+                  }
+              
+                  get_chats_connection.query(get_sql, function(query_error, get_chats_results){
+                      if(query_error){
+                          //error running the query
+                          console.log("Error");
+                      }
+              
+              
+                      if(get_chats_results.length > 0){
+                        console.log("Nothing here");
+                        response.send({
+                          message: "An ongoing chat exists between peers",
+                          data: {
+                              chat_data: chat_data,
+                              result: check_result,
+                              chat_messages: get_chats_results
+                          },
+                          code: "success"
+                      });
+                      
+              
+                      }else{
+              
+                        response.send({
+                          message: "No chat message has been sent in this connection",
+                          data: {
+                              chat_data: chat_data,
+                              result: check_result,
+                              chat_messages: get_chats_results
+                          },
+                          code: "success"
+                      });
+              
+                      }
+              
+              
+                  })
+              
+                  get_chats_connection.release();
+              
+                })
+
+
+                //currentChatMessages = await getChatMessages(connection_id)
+               
 
             }else{
 
@@ -378,13 +561,74 @@ app.post("/peerserver/connections/retrieve-active", function(request, response){
 
 
         })
-
+        connection.release();
 
     })
+
+   
 
     
 
 });
+
+
+//send a chat message
+app.post("/peerserver/chatmessage/author/send", function(request, response){
+
+  message = request.body.message;
+  time_created = request.body.time_created;
+  host_email = request.body.host_email;
+  connection_id = request.body.connection_id;
+
+
+  //add to the chats_messages table
+  add_query = `INSERT INTO chats_messages(chat_unique_id, message, author_email, date_created) VALUES('${connection_id}', '${message}', 
+              '${host_email}', NOW())`;
+
+
+  _conn.getConnection(function(err, add_message_connection){
+    if(err){
+      //
+    }
+
+    add_message_connection.query(add_query, function(error, results){
+
+      if(error){
+        //show error 
+        console.log(error.message);
+
+        response.send({
+          message: "message not added",
+          data: null,
+          code: "error"
+        })
+      }else{
+
+        //return
+        response.send({
+          message: "message added",
+          data: null,
+          code: "message_saved"
+        })
+
+
+      }
+
+
+
+
+    })
+
+
+    add_message_connection.release();
+
+
+
+  });
+
+
+
+})
 
 
 
@@ -394,20 +638,33 @@ app.get("/peerserver/connections/trigger-recepient-reload", function(request, re
     //the recepient must be listening before they can get information from this ..
 
     //console.log(request.query);
-    let reload_time;
-    if(request.query.reload_time == null || request.query.reload_time == undefined){
-        reload_time = new Date().getTime();
-    }else{
-        reload_time = request.query.reload_time;
+    console.log("before trigger");
+    try{
+      let reload_time;
+      if(request.query.reload_time == null || request.query.reload_time == undefined){
+          reload_time = new Date().getTime();
+      }else{
+          reload_time = request.query.reload_time;
+      }
+  
+      console.log("Triggered");
+  
+      // response.setHeader("Content-Type", "text/event-stream");
+  
+      // sendTrigger(response , reload_time)
+  
+      pusher.trigger("chat-connections", "author-page-reloaded", {
+        message: "author page has reloaded",
+        data: {},
+        code: "author-page-reloaded"
+      });
+  
+      response.send("null");
+
+    }catch(error){
+      console.error("Error");
     }
 
-    
-
-    console.log("Triggered");
-
-    response.setHeader("Content-Type", "text/event-stream");
-
-    sendTrigger(response , reload_time)
 
 
 })
