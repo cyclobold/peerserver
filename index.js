@@ -13,6 +13,7 @@ app.use(express.json());
 app.use(cors());
 
 
+API_URL = `https://testing-peerserver.herokuapp.com`;
 //Pusher Setup
 const pusher = new Pusher({
   appId: "1338629",
@@ -249,7 +250,7 @@ app.post("/peerserver/email/send", function(request, response){
                     <hr>
                     <p>Here is the Invitation Id: ${payload}</p>
 
-                    <p>Click here to join this chat: <a href='http://127.0.0.1:5500/join.html'>Join Chat</a></p>
+                    <p>Click here to join this chat: <a href='${API_URL}/join.html'>Join Chat</a></p>
 
                     <p>Then paste the Invitation ID...</p>
 
