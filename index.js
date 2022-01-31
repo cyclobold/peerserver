@@ -853,4 +853,4 @@ function sendTrigger(response, reload_time){
     response.write("data: " + `trigger-reconnection-${reload_time}\n\n`);
 }
 
-app.listen("5000", () => console.log("Server on PORT 5000"));
+app.listen(process.env.PORT || 5000, () => console.log("Server on PORT 5000"));
