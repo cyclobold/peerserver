@@ -465,6 +465,50 @@ app.get("/peerserver/connections/peer/check", function(request, response){
 })
 
 
+app.post("/peerserver/connections/disconnect", function(request, response){
+
+  connectionKey = request.body.connectionKey;
+
+  disconnect_query = `UPDATE chats SET is_active=false WHERE chat_unique_id=${connectionKey} LIMIT 1`;
+
+  _conn.getConnection(function(err, connection){
+      if(err){
+        //
+      }
+
+      connection.query(disconnect_query, function(remove_error, result){
+
+        if(remove_error){
+            //error disconnecting this user
+            response.send({
+              message: "Could not remove the chat data",
+              data: null,
+              code: "error"
+            })
+
+        }else{
+
+          response.send({
+            message: "Data removed",
+            data: null,
+            code: "success"
+          });
+
+
+        }
+
+
+
+      })
+
+
+  })
+
+
+
+})
+
+
 
 app.post("/peerserver/connections/retrieve-active", function(request, response){
     const chat_data = request.body.chat_data;
@@ -572,6 +616,136 @@ app.post("/peerserver/connections/retrieve-active", function(request, response){
 });
 
 
+//Confirm the PeerKey
+app.get("/peerserver/chat/data/check_key", function(request, response){
+    peerKey = request.query.peerKey;
+
+    //check if this key is valid
+
+    let check_query = `SELECT * FROM chats WHERE chat_unique_id='${peerKey}' LIMIT 1`;
+    
+    _conn.getConnection(function(error, check_connection){
+
+        if(error){
+            throw new Error(error.message);
+        }
+
+
+        check_connection.query(check_query, function(check_error, results){
+
+            if(check_error){
+                //there is an error
+                response.send({
+                    message: "Internal Error. Could not connect: " + check_error.message,
+                    data: {
+                        chat_data: null,
+                        peerKey: peerKey,
+                        isValid: false
+                    },
+                    code: "error",
+
+                })
+            }
+
+            if(results.length > 0){
+                //there is a match
+                response.send({
+                    message: "Match found",
+                    data: {
+                        chat_data: results[0],
+                        peerKey: peerKey,
+                        isValid: true
+                    },
+                    code: "success",
+
+                })
+
+
+            }else{
+                //there is no match..
+                response.send({
+                    message: "Match not found",
+                    data: {
+                        chat_data: null,
+                        peerKey: peerKey,
+                        isValid: false
+                    },
+                    code: "error",
+
+                })
+            }
+
+
+        })
+
+        check_connection.release();
+
+    })
+
+
+
+
+
+})
+
+//The Receiver sends a message 
+app.post("/peerserver/chat/receiver/save", function(request, response){
+
+    //get the data
+    const time_created = request.body.time_created;
+    const connectionKey = request.body.connectionKey;
+    const message = request.body.message;
+    const sender_email = request.body.sender_email;
+
+    //this receiver's email should have been registered as well..
+
+    //save query
+    save_query = `INSERT INTO chats_messages (chat_unique_id, message, author_email, date_created ) VALUES('${connectionKey}', '${message}', '${sender_email}', NOW())`;
+
+
+    //proceed
+    _conn.getConnection(function(error, saveConnection){
+        if(error){
+            throw new Error("Something wrong just happened: ", error.message)
+        }
+
+
+        saveConnection.query(save_query, function(save_error, results){
+
+            if(save_error){
+                //error..
+                throw new Error("SOmething wrong just happened: ", save_error.message);
+            }else{
+                //success
+                response.send({
+                    message: "operation successful",
+                    data: {
+                        connectionKey: connectionKey,
+                        id: results.insertId,
+                        sender_email: sender_email,
+                        message: message,
+                        time_created: new Date(time_created)
+                    },
+                    code: "success"
+                })
+
+            }
+
+
+        })
+
+        saveConnection.release();
+
+
+
+    })
+
+
+
+
+})
+
+
 //send a chat message
 app.post("/peerserver/chatmessage/author/send", function(request, response){
 
@@ -607,7 +781,13 @@ app.post("/peerserver/chatmessage/author/send", function(request, response){
         //return
         response.send({
           message: "message added",
-          data: null,
+          data: {
+              message: message,
+              date_created: new Date(time_created),
+              chat_unique_id: connection_id,
+              author_email: host_email, 
+              id: results.insertId
+          },
           code: "message_saved"
         })
 
