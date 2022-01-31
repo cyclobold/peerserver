@@ -1,0 +1,1 @@
+Copy the contents of .env-example to create .env file

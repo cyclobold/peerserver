@@ -16,10 +16,10 @@ app.use(cors());
 API_URL = `https://testing-peerserver.herokuapp.com`;
 //Pusher Setup
 const pusher = new Pusher({
-  appId: "1338629",
-  key: "692bb295a55675b8521d",
-  secret: "0c546b3c418cc8894b1e",
-  cluster: "eu",
+  appId: process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_APP_KEY,
+  secret: process.env.PUSHER_APP_SECRET,
+  cluster: process.env.PUSHER_CLUSTER,
   useTLS: true
 });
 
@@ -28,8 +28,8 @@ const pusher = new Pusher({
 var transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'dashpayltd@gmail.com',
-      pass: 'medi4cine'
+      user: process.env.EMAIL_ADDRESS,
+      pass: process.env.EMAIL_PASSWORD
     }
   });
 
